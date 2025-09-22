@@ -1,0 +1,4 @@
+pandas==2.0.3
+apache-airflow-providers-postgres==6.0.0
+apache-airflow-providers-redis==3.1.0
+

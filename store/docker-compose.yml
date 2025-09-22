@@ -1,0 +1,132 @@
+services:
+  clickhouse:
+    image: clickhouse:latest
+    platform: linux/amd64
+    container_name: ml-clickhouse 
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+      - 8123:8123
+    environment:
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB}
+    volumes:
+      - ./clickhouse/data:/var/lib/clickhouse/
+      - ./clickhouse/logs:/var/log/clickhouse-server/
+      - ./clickhouse/config/:/etc/clickhouse-server/config/
+      - ./clickhouse/users/:/etc/clickhouse-server/users.d/
+    cap_add:
+      - SYS_NICE
+      - NET_ADMIN
+      - IPC_LOCK
+      - SYS_PTRACE
+    healthcheck:
+      test: wget --no-verbose --tries=1 http://127.0.0.1:8123/ping || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    networks:
+      - data-network
+  
+  postgres:
+    platform: linux/amd64
+    image: postgres:13
+    container_name: ml-postgres
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_DB=${PG_NAME}
+      - POSTGRES_USER=${PG_USER}
+      - POSTGRES_PASSWORD=${PG_PASSWORD}
+      - POSTGRES_HOST=${PG_HOST}
+      - POSTGRES_PORT=${PG_PORT}
+    volumes:
+      - ./postgres/pg-data:/var/lib/postgresql/data
+    cap_add:
+      - SYS_NICE
+      - NET_ADMIN
+      - IPC_LOCK
+      - SYS_PTRACE
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - store-network
+  
+  minio:
+    platform: linux/amd64
+    image: minio/minio:latest
+    container_name: ml-minio
+    ports:
+      - "9000:9000"
+      - "9099:9099"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ./minio:/data
+    command: server --address ":9099" --console-address ":9000" /data
+    restart: always # necessary since it's failing to start sometimes
+    healthcheck:
+      test: curl -I http://localhost:9000/minio/health/live || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    networks:
+    - s3-storage-network
+
+  redis:
+    image: redis:latest
+    container_name: ml-redis
+    volumes:
+      - ./redis/data/:/data/
+      - ./redis/redis.conf:/etc/redis/redis.conf
+    ports:
+      - 6379:6379
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_USER=${REDIS_USER}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    command: >
+      sh -c '
+        echo "bind 0.0.0.0" > /etc/redis/redis.conf &&
+        echo "requirepass $REDIS_PASSWORD" >> /etc/redis/redis.conf &&
+        echo "appendonly yes" >> /etc/redis/redis.conf &&
+        echo "appendfsync everysec" >> /etc/redis/redis.conf &&
+        echo "user default on nopass ~* +@all" > /etc/redis/users.acl &&
+        echo "user $REDIS_USER on >$REDIS_PASSWORD ~* +@all" >> /etc/redis/users.acl &&
+        redis-server /etc/redis/redis.conf --aclfile /etc/redis/users.acl
+      '
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "$REDIS_PASSWORD", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - store-network
+
+networks:
+  data-network:
+    name: data-network
+  store-network:
+    name: store-network
+  s3-storage-network:
+    name: s3-storage-network

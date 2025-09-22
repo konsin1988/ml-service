@@ -1,0 +1,40 @@
+services:
+  mlflow:
+    platform: linux/amd64
+    restart: always
+    build:
+      context: ..
+      dockerfile: docker/mlflow/Dockerfile
+    image: konsin1988/ml-mlflow:latest
+    container_name: ml-mlflow
+    ports:
+        - 5000:5000
+    volumes:
+        - ./mlflow:/mlflow
+    environment:
+        - MLFLOW_S3_ENDPOINT_URL=${MLFLOW_S3_ENDPOINT_URL}
+        - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+        - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+        - MLFLOW_TRACKING_USERNAME=${MLFLOW_TRACKING_USERNAME}
+        - MLFLOW_TRACKING_PASSWORD=${MLFLOW_TRACKING_PASSWORD}
+    command: mlflow server --backend-store-uri postgresql://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_NAME} --default-artifact-root s3://mlflow --serve-artifacts --host 0.0.0.0
+    healthcheck:  
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]  
+      interval: 30s  
+      timeout: 10s  
+      retries: 3 
+    networks:
+      - data-network
+      - s3-storage-network
+      - store-network
+
+networks:
+  data-network:
+    name: data-network
+    external: True
+  store-network:
+    name: store-network
+    external: True
+  s3-storage-network:
+    name: s3-storage-network
+    external: True

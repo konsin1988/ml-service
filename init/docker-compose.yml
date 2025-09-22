@@ -1,0 +1,49 @@
+services:
+  init:
+    image: konsin1988/init_ml_service:latest
+    build:
+      context: ..
+      dockerfile: ./docker/init/Dockerfile
+    container_name: ml-init 
+    volumes:
+      - ./data/:/data/
+      - ./:/init/
+    environment:
+      - PG_NAME=${PG_NAME}
+      - PG_USER=${PG_USER}
+      - PG_PASSWORD=${PG_PASSWORD}
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=${PG_PORT}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - CLICKHOUSE_HOST=${CLICKHOUSE_HOST}
+      - CLICKHOUSE_PORT=${CLICKHOUSE_PORT}
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB}
+      - MLFLOW_S3_ENDPOINT_URL=${MLFLOW_S3_ENDPOINT_URL}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+        #    depends_on:
+        #      postgres:
+        #        condition: service_healthy
+        #        restart: true
+        #      clickhouse:
+        #        condition: service_healthy
+        #        restart: true
+        #      minio:
+        #        condition: service_healthy
+        #        restart: true
+    networks:
+      - data-network
+      - store-network
+      - s3-storage-network
+
+networks:
+  data-network:
+    name: data-network
+    external: True
+  store-network:
+    name: store-network
+    external: True
+  s3-storage-network:
+    name: s3-storage-network
+    external: True
