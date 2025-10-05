@@ -1,0 +1,28 @@
+services:
+  spark:
+    build:
+      context: .
+        # image: konsin1988/ml-spark 
+        #image: spark:3.5.5-scala2.12-java11-python3-ubuntu 
+    image: konsin1988/spark:3.5.7-scala2.13-java11
+        #image: spark:4.0.0-scala2.13-java17-python3-ubuntu
+    container_name: ml-spark
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=8123
+      - CLICKHOUSE_USER=konsin1988 
+      - CLICKHOUSE_PASSWORD=r13l02c1988
+      - CLICKHOUSE_DB=wb_orders
+      - CLICKHOUSE_TABLE=wb_orders
+    command: /opt/spark/bin/spark-submit --class com.konsin1988.Main /app/target/scala-2.13/ml_service-assembly-1.0.0.jar
+        # command: tail -f /dev/null
+    volumes:
+      - ./ml_service:/app
+
+    networks:
+      - data-network
+
+networks:
+  data-network:
+    name: data-network
+    external: True
